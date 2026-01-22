@@ -1,0 +1,5 @@
+aws rekognition index-faces \
+    --collection-id "StudentFaces" \
+    --image '{"S3Object":{"Bucket":"attendifystudentphotos","Name":"photos/external image id-profile.jpg"}}' \
+    --external-image-id "external image id" \
+    --region ap-south-1
