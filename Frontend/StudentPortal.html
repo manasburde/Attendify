@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendify - Student Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
+        .icon-bg-blue { background-color: #eef2ff; }
+        .icon-bg-green { background-color: #e6f7f0; }
+        .icon-bg-yellow { background-color: #fffbeb; }
+        .icon-bg-red { background-color: #fef2f2; }
+        .icon-bg-purple { background-color: #f3eefc; }
+        .info-label { display: block; font-size: 0.875rem; font-weight: 800; color: #374151; }
+        .info-data { margin-top: 0.25rem; font-size: 0.875rem; color: #111827; font-weight: 600; background-color: #f9fafb; padding: 0.5rem 0.75rem; border-radius: 0.375rem; border: 1px solid #e5e7eb; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-user-check text-2xl text-indigo-600"></i>
+                    <span class="text-2xl font-bold text-gray-800">Attendify</span>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div class="flex items-center">
+                        <svg class="w-6 h-6 text-gray-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                        <span id="header-reg-no" class="text-gray-700 font-medium"></span>
+                    </div>
+                    <button id="logout-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <section class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+            <div class="flex items-center">
+                <div class="bg-indigo-600 p-4 rounded-lg flex items-center justify-center h-20 w-20">
+                    <i class="fas fa-user-graduate text-4xl text-white"></i>
+                </div>
+                <div class="ml-4">
+                    <h1 id="welcome-header" class="text-3xl font-bold text-gray-900">Welcome</h1>
+                    <p class="text-gray-500">Student Portal Dashboard</p>
+                </div>
+            </div>
+            <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mt-4 md:mt-0 flex items-center">
+                <svg class="w-8 h-8 text-indigo-500 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                <div>
+                    <p id="profile-name" class="font-semibold text-indigo-800"></p>
+                    <p id="profile-details" class="text-sm text-indigo-600"></p>
+                </div>
+            </div>
+        </section>
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+             <div class="bg-white p-6 rounded-lg shadow-sm flex items-center justify-between"><div><p class="text-gray-500">Total Classes</p><p id="total-classes-dashboard" class="text-3xl font-bold text-gray-900">--</p></div><div class="icon-bg-green p-3 rounded-lg"><i class="fas fa-book-open text-2xl text-green-500"></i></div></div>
+             <div class="bg-white p-6 rounded-lg shadow-sm flex items-center justify-between"><div><p class="text-gray-500">Present</p><p id="present-dashboard" class="text-3xl font-bold text-gray-900">--</p></div><div class="icon-bg-blue p-3 rounded-lg"><i class="fas fa-check-circle text-2xl text-blue-500"></i></div></div>
+             <div class="bg-white p-6 rounded-lg shadow-sm flex items-center justify-between"><div><p class="text-gray-500">Absent</p><p id="absent-dashboard" class="text-3xl font-bold text-gray-900">--</p></div><div class="icon-bg-red p-3 rounded-lg"><i class="fas fa-times-circle text-2xl text-red-500"></i></div></div>
+             <div class="bg-white p-6 rounded-lg shadow-sm flex items-center justify-between"><div><p class="text-gray-500">Attendance Rate</p><p id="rate-dashboard" class="text-3xl font-bold text-gray-900">--</p></div><div class="icon-bg-purple p-3 rounded-lg"><i class="fas fa-chart-line text-2xl text-purple-500"></i></div></div>
+        </section>
+        <div class="bg-white rounded-lg shadow-sm">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+                    <a href="#" id="studentInfoTab" class="border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Student Info</a>
+                    <a href="#" id="attendanceTab" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Attendance</a>
+                </nav>
+            </div>
+            <div id="studentInfoContent" class="p-6">
+                <div class="mt-8">
+                    <h3 class="text-base font-semibold text-gray-800">Personal Information</h3>
+                    <dl class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                        <div><dt class="info-label">Registration No.</dt><dd class="info-data"></dd></div>
+                        <div><dt class="info-label">Email Address</dt><dd class="info-data"></dd></div>
+                        <div><dt class="info-label">First Name</dt><dd class="info-data"></dd></div>
+                        <div><dt class="info-label">Last Name</dt><dd class="info-data"></dd></div>
+                        <div><dt class="info-label">Phone Number</dt><dd class="info-data"></dd></div>
+                        <div><dt class="info-label">Date of Birth</dt><dd class="info-data"></dd></div>
+                        <div class="sm-col-span-2"><dt class="info-label">Address</dt><dd class="info-data"></dd></div>
+                    </dl>
+                </div>
+                <div class="mt-10">
+                    <h3 class="text-base font-semibold text-gray-800">Academic Information</h3>
+                    <dl class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                        <div><dt class="info-label">Department</dt><dd class="info-data"></dd></div>
+                        <div><dt class="info-label">Academic Year</dt><dd class="info-data"></dd></div>
+                        <div class="sm-col-span-2"><dt class="info-label">Course/Program</dt><dd class="info-data"></dd></div>
+                    </dl>
+                </div>
+            </div>
+            <div id="attendanceContent" class="p-6 hidden">
+                <div id="semester-view">
+                    <h2 class="text-lg font-semibold text-gray-900">Attendance Details</h2>
+                    <div class="mt-6">
+                        <label for="semester-select" class="block text-sm font-medium text-gray-700">Select your Semester</label>
+                        <select id="semester-select" class="mt-1 block w-full md:w-1/2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"></select>
+                    </div>
+                    <div id="subject-list-container" class="mt-6 hidden">
+                        <h3 class="text-md font-semibold text-gray-800">Your Subjects:</h3>
+                        <div id="subject-list" class="mt-2 space-y-2"></div>
+                    </div>
+                </div>
+                <div id="subject-detail-view" class="hidden">
+                    <button id="back-to-subjects" class="text-sm font-medium text-indigo-600 hover:text-indigo-800 mb-4"><i class="fas fa-arrow-left mr-2"></i>Back to Subjects</button>
+                    <h2 id="subject-title" class="text-xl font-bold text-gray-900"></h2>
+                    <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="bg-gray-50 p-4 rounded-lg"><div><p class="text-sm text-gray-500">Total Classes</p><p id="total-classes" class="text-2xl font-bold text-gray-900"></p></div></div>
+                        <div class="bg-gray-50 p-4 rounded-lg"><div><p class="text-sm text-gray-500">Present</p><p id="present-classes" class="text-2xl font-bold text-gray-900"></p></div></div>
+                        <div class="bg-gray-50 p-4 rounded-lg"><div><p class="text-sm text-gray-500">Absent</p><p id="absent-classes" class="text-2xl font-bold text-gray-900"></p></div></div>
+                        <div class="bg-gray-50 p-4 rounded-lg"><div><p class="text-sm text-gray-500">Attendance Rate</p><p id="attendance-rate" class="text-2xl font-bold text-gray-900"></p></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script>
+        // --- START: NEW DYNAMIC DATA SCRIPT ---
+        // --- Configuration ---
+        const API_URL = 'api invoke url'; 
+        const COGNITO_DOMAIN = 'domain url';
+        const CLIENT_ID = 'client-id';
+        const LOGOUT_URI = 'http://localhost:port/Loginpage.html';
+        
+        // This variable will hold the attendance data once fetched
+        let subjectsBySemester = {};
+        
+        // --- DOM Elements ---
+        const studentInfoTab = document.getElementById('studentInfoTab');
+        const attendanceTab = document.getElementById('attendanceTab');
+        const studentInfoContent = document.getElementById('studentInfoContent');
+        const attendanceContent = document.getElementById('attendanceContent');
+        const semesterSelect = document.getElementById('semester-select');
+        const subjectListContainer = document.getElementById('subject-list-container');
+        const subjectListDiv = document.getElementById('subject-list');
+        const semesterView = document.getElementById('semester-view');
+        const subjectDetailView = document.getElementById('subject-detail-view');
+        const backToSubjectsBtn = document.getElementById('back-to-subjects');
+        
+        // --- Helper Functions ---
+        function findDdByDtLabel(labelText) {
+            const allLabels = document.querySelectorAll('.info-label');
+            for (const label of allLabels) {
+                if (label.textContent.trim() === labelText) {
+                    return label.nextElementSibling;
+                }
+            }
+            return null;
+        }
+        
+        // --- Core Functions ---
+        async function fetchAndDisplayStudentData() {
+            const idToken = localStorage.getItem('id_token');
+            if (!idToken) {
+                alert('You are not logged in. Redirecting to login page.');
+                window.location.href = LOGOUT_URI;
+                return;
+            }
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'GET',
+                    headers: { 'Authorization': idToken }
+                });
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) {
+                         alert('Your session has expired. Please log in again.');
+                         performLogout();
+                    }
+                    throw new Error(`Failed to fetch data. Status: ${response.status}`);
+                }
+                const data = await response.json();
+                document.getElementById('welcome-header').textContent = `Welcome, ${data.firstName}`;
+                document.getElementById('header-reg-no').textContent = data.registrationNo;
+                document.getElementById('profile-name').textContent = `${data.firstName} ${data.lastName}`;
+                document.getElementById('profile-details').textContent = `${data.courseProgram} • ${data.academicYear}`;
+                findDdByDtLabel('Registration No.').textContent = data.registrationNo;
+                findDdByDtLabel('Email Address').textContent = data.email;
+                findDdByDtLabel('First Name').textContent = data.firstName;
+                findDdByDtLabel('Last Name').textContent = data.lastName;
+                findDdByDtLabel('Phone Number').textContent = data.phoneNumber;
+                findDdByDtLabel('Date of Birth').textContent = data.dateOfBirth;
+                findDdByDtLabel('Address').textContent = data.address;
+                findDdByDtLabel('Department').textContent = data.department;
+                findDdByDtLabel('Academic Year').textContent = data.academicYear;
+                findDdByDtLabel('Course/Program').textContent = data.courseProgram;
+                
+                subjectsBySemester = data.attendance || {};
+                populateSemesterDropdown();
+                calculateAndDisplayOverallStats();
+            } catch (error) {
+                console.error('Error fetching student data:', error);
+                alert('Could not load your information. Please try logging in again.');
+            }
+        }
+        
+        function performLogout() {
+            localStorage.clear();
+            const logoutUrl = `${COGNITO_DOMAIN}/logout?client_id=${CLIENT_ID}&logout_uri=${encodeURIComponent(LOGOUT_URI)}`;
+            window.location.href = logoutUrl;
+        }
+        
+        // --- UI & Tab Logic ---
+        function setActiveTab(activeTab) {
+            [studentInfoTab, attendanceTab].forEach(tab => tab.classList.remove('border-indigo-500', 'text-indigo-600'));
+            activeTab.classList.add('border-indigo-500', 'text-indigo-600');
+        }
+        studentInfoTab.addEventListener('click', (e) => { e.preventDefault(); setActiveTab(studentInfoTab); studentInfoContent.classList.remove('hidden'); attendanceContent.classList.add('hidden'); });
+        attendanceTab.addEventListener('click', (e) => { e.preventDefault(); setActiveTab(attendanceTab); attendanceContent.classList.remove('hidden'); studentInfoContent.classList.add('hidden'); semesterView.classList.remove('hidden'); subjectDetailView.classList.add('hidden'); });
+        
+        // --- Attendance Section Logic ---
+        function populateSemesterDropdown() {
+            const semesterKeys = Object.keys(subjectsBySemester);
+            semesterSelect.innerHTML = '<option value="">-- All Semesters --</option>';
+            semesterKeys.forEach(key => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = `Semester ${key.replace('sem', '')}`;
+                semesterSelect.appendChild(option);
+            });
+        }
+
+        function calculateAndDisplayOverallStats() {
+            const allSubjects = Object.values(subjectsBySemester).flat();
+            if (!allSubjects || allSubjects.length === 0) {
+                document.getElementById('total-classes-dashboard').textContent = '0';
+                document.getElementById('present-dashboard').textContent = '0';
+                document.getElementById('absent-dashboard').textContent = '0';
+                document.getElementById('rate-dashboard').textContent = 'N/A';
+                return;
+            }
+            const stats = allSubjects.reduce((acc, sub) => {
+                acc.total += sub.total || 0;
+                acc.present += sub.present || 0;
+                return acc;
+            }, { total: 0, present: 0 });
+            const absent = stats.total - stats.present;
+            const rate = stats.total > 0 ? `${((stats.present / stats.total) * 100).toFixed(1)}%` : 'N/A';
+            document.getElementById('total-classes-dashboard').textContent = stats.total;
+            document.getElementById('present-dashboard').textContent = stats.present;
+            document.getElementById('absent-dashboard').textContent = absent;
+            document.getElementById('rate-dashboard').textContent = rate;
+        }
+
+        function updateDashboardStatsForSemester(semesterKey) {
+            const subjects = subjectsBySemester[semesterKey];
+            if (!subjects || subjects.length === 0) return;
+            const stats = subjects.reduce((acc, sub) => ({ total: acc.total + sub.total, present: acc.present + sub.present }), { total: 0, present: 0 });
+            const absent = stats.total - stats.present;
+            const rate = stats.total > 0 ? `${((stats.present / stats.total) * 100).toFixed(1)}%` : 'N/A';
+            document.getElementById('total-classes-dashboard').textContent = stats.total;
+            document.getElementById('present-dashboard').textContent = stats.present;
+            document.getElementById('absent-dashboard').textContent = absent;
+            document.getElementById('rate-dashboard').textContent = rate;
+        }
+
+        // ✅ ADDED: Function to update dashboard for a single subject
+        function updateDashboardStatsForSubject(subject) {
+            if (!subject) return;
+            const absent = subject.total - subject.present;
+            const rate = subject.total > 0 ? `${((subject.present / subject.total) * 100).toFixed(1)}%` : 'N/A';
+            document.getElementById('total-classes-dashboard').textContent = subject.total;
+            document.getElementById('present-dashboard').textContent = subject.present;
+            document.getElementById('absent-dashboard').textContent = absent;
+            document.getElementById('rate-dashboard').textContent = rate;
+        }
+        
+        semesterSelect.addEventListener('change', () => {
+            const selectedSemester = semesterSelect.value;
+            if (selectedSemester) {
+                updateDashboardStatsForSemester(selectedSemester);
+                const subjects = subjectsBySemester[selectedSemester];
+                subjectListDiv.innerHTML = subjects.map(s => `<a href="#" class="block p-3 bg-gray-50 hover:bg-indigo-100 rounded-md" data-subject='${JSON.stringify(s)}'>${s.name}</a>`).join('');
+                subjectListContainer.classList.remove('hidden');
+                document.querySelectorAll('#subject-list a').forEach(link => link.addEventListener('click', (e) => {
+                    e.preventDefault(); 
+                    showSubjectDetails(JSON.parse(e.currentTarget.dataset.subject));
+                }));
+            } else {
+                subjectListContainer.classList.add('hidden');
+                subjectListDiv.innerHTML = '';
+                calculateAndDisplayOverallStats();
+            }
+        });
+
+        // ✅ MODIFIED: This function now also updates the main dashboard
+        function showSubjectDetails(subject) {
+            semesterView.classList.add('hidden'); 
+            subjectDetailView.classList.remove('hidden');
+            
+            const absent = subject.total - subject.present;
+            const rate = subject.total > 0 ? `${((subject.present / subject.total) * 100).toFixed(1)}%` : 'N/A';
+            
+            // Update the detailed view within the card
+            document.getElementById('subject-title').textContent = subject.name;
+            document.getElementById('total-classes').textContent = subject.total;
+            document.getElementById('present-classes').textContent = subject.present;
+            document.getElementById('absent-classes').textContent = absent;
+            document.getElementById('attendance-rate').textContent = rate;
+            
+            // Update the main dashboard stats at the top
+            updateDashboardStatsForSubject(subject);
+        }
+        
+        // ✅ MODIFIED: This button now restores the correct semester/overall stats
+        backToSubjectsBtn.addEventListener('click', (e) => { 
+            e.preventDefault(); 
+            subjectDetailView.classList.add('hidden'); 
+            semesterView.classList.remove('hidden');
+            
+            // When going back, restore the dashboard to the selected semester's stats (or overall)
+            const selectedSemester = semesterSelect.value;
+            if (selectedSemester) {
+                updateDashboardStatsForSemester(selectedSemester);
+            } else {
+                calculateAndDisplayOverallStats();
+            }
+        });
+        
+        document.getElementById('logout-btn').addEventListener('click', (e) => { e.preventDefault(); if (confirm('Are you sure you want to logout?')) performLogout(); });
+        
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', fetchAndDisplayStudentData);
+    </script>
+</body>
+</html>
