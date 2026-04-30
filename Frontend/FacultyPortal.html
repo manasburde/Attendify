@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendify - Faculty Portal</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        .camera-feed { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 0.5rem; }
+        .notification { animation: slideInRight 0.3s ease-out; }
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+
+<body class="min-h-screen bg-slate-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-users text-2xl text-blue-600"></i>
+                    <h1 class="text-xl font-bold text-slate-800">Attendify</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="faculty-email" class="text-sm text-slate-600 font-medium"></span>
+                    <button id="logout-btn" 
+                        class="flex items-center space-x-2 px-3 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors">
+                        <i class="fas fa-sign-out-alt text-sm"></i>
+                        <span class="text-sm font-medium">Logout</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div id="main-content" class="max-w-6xl mx-auto px-6 py-8">
+        <!-- All sections are managed by JS -->
+    </div>
+    
+    <!-- Notification Toast -->
+    <div id="notification-toast" class="hidden fixed top-20 right-5 w-80 bg-white rounded-lg shadow-lg p-4 notification z-50">
+        <div class="flex items-start">
+            <div id="toast-icon" class="flex-shrink-0"></div>
+            <div class="ml-3 w-0 flex-1 pt-0.5">
+                <p id="toast-message" class="text-sm font-medium text-gray-900"></p>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- AWS Configuration ---
+        const COGNITO_DOMAIN = 'https://ap-south-1gdypzg5zm.auth.ap-south-1.amazoncognito.com';
+        const CLIENT_ID = '5ik5n0sg7ktulsismenlua00h5';
+        const LOGIN_PAGE_URI = 'http://localhost:8000/FacultyLogin.html';
+        const authorizedEmails = ['manasburde@gmail.com'];
+
+        // --- API Configuration ---
+        const FACE_RECOGNITION_API = 'https://ez7yy7pkqd.execute-api.ap-south-1.amazonaws.com/prod/recognize-face';
+        const MODIFY_ATTENDANCE_API = 'https://9yzihxf9d4.execute-api.ap-south-1.amazonaws.com/prod/modify-attendance';
+        const GET_ATTENDANCE_HISTORY_API = 'https://9yzihxf9d4.execute-api.ap-south-1.amazonaws.com/prod/get-attendance-history'; 
+
+        // --- DOM Elements & State ---
+        const mainContent = document.getElementById('main-content');
+        let videoStream = null;
+        let currentSession = { subject: null, semester: null, presentStudents: [], absentStudents: [] };
+        
+        // --- Mock Data for History (replace with API call) ---
+        const mockHistoryData = {
+            "Chemistry_1": [
+                {
+                    date: "2025-09-29",
+                    timestamp: new Date('2025-09-29T10:00:00').getTime(),
+                    presentStudents: [{ studentId: 'student-001', registrationNo: 'Z4BSA10019', name: 'Manas Burde' }],
+                    absentStudents: []
+                },
+                {
+                    date: "2025-09-30",
+                    timestamp: new Date().getTime() - (30 * 60 * 1000), // 30 mins ago for testing
+                    presentStudents: [{ studentId: 'student-001', registrationNo: 'Z4BSA10019', name: 'Manas Burde' }],
+                    absentStudents: [{ studentId: 'student-002', registrationNo: 'Z4BSA10020', name: 'Jane Doe' }]
+                }
+            ],
+             "Calculus_1": [
+                {
+                    date: "2025-09-28",
+                    timestamp: new Date('2025-09-28T11:00:00').getTime(),
+                    presentStudents: [],
+                    absentStudents: []
+                }
+            ]
+        };
+        let modificationState = {};
+
+        // --- Helper Functions ---
+        function parseJwt(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
+        function performLogout() { localStorage.removeItem('id_token'); const logoutUrl = `${COGNITO_DOMAIN}/logout?client_id=${CLIENT_ID}&logout_uri=${encodeURIComponent(LOGIN_PAGE_URI)}`; window.location.href = logoutUrl; }
+        function showNotification(message, isError = false) { const toast = document.getElementById('notification-toast'); const messageP = document.getElementById('toast-message'); const iconDiv = document.getElementById('toast-icon'); messageP.textContent = message; if (isError) { iconDiv.innerHTML = `<i class="fas fa-times-circle text-red-500 text-2xl"></i>`; } else { iconDiv.innerHTML = `<i class="fas fa-check-circle text-green-500 text-2xl"></i>`; } toast.classList.remove('hidden'); setTimeout(() => { toast.classList.add('hidden'); }, 3000); }
+        
+        // --- UI Rendering Functions ---
+        
+        function renderSlotSelection() {
+             mainContent.innerHTML = `
+                <div class="text-center mb-8">
+                    <div class="inline-flex items-center space-x-3 mb-4"><i class="fas fa-chalkboard-teacher text-3xl text-blue-600"></i><h2 class="text-3xl font-bold text-slate-800">Faculty Portal</h2></div>
+                </div>
+                <div id="slot-selection-section" class="bg-white rounded-xl shadow-lg overflow-hidden max-w-lg mx-auto">
+                    <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6"><div class="text-center"><i class="fas fa-clock text-3xl text-white mb-3"></i><h3 class="text-2xl font-bold text-white">Select Class Slot</h3><p class="text-blue-100 mt-2">Choose the class and time slot to begin.</p></div></div>
+                    <div class="p-8"><div class="space-y-6">
+                        <div class="space-y-2"><label for="class-slot-select" class="block text-sm font-medium text-slate-700">Class & Time Slot</label><select id="class-slot-select" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"><option value="">-- Select a Slot --</option><option value="Data Structures_2">Data Structures - Semester 2</option><option value="Digital Logic Design_2">Digital Logic Design - Semester 2</option><option value="Calculus_1">Calculus - Semester 1</option><option value="Chemistry_1">Chemistry - Semester 1</option></select></div>
+                        <button id="start-session-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"><i class="fas fa-arrow-right mr-2"></i>Proceed</button>
+                        <div id="slot-error" class="hidden text-red-600 text-center text-sm bg-red-50 p-3 rounded-lg border border-red-200"></div>
+                    </div></div>
+                </div>`;
+            document.getElementById('start-session-btn').addEventListener('click', showHistory);
+        }
+
+        function renderAttendanceHistory() {
+            const { subject, semester } = currentSession;
+            const historyKey = `${subject}_${semester}`;
+            const classHistory = mockHistoryData[historyKey] || [];
+            
+            mainContent.innerHTML = `
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden max-w-4xl mx-auto">
+                    <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="text-2xl font-bold text-white">Attendance History</h3>
+                                <p class="text-blue-100 mt-2">${subject} - Semester ${semester}</p>
+                            </div>
+                            <button id="start-today-session-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md"><i class="fas fa-plus mr-2"></i>Start Today's Session</button>
+                        </div>
+                    </div>
+                    <div class="p-8 space-y-4">
+                        ${classHistory.length > 0 ? classHistory.map((session, index) => renderHistoryCard(session, index)).join('') : '<p class="text-center text-slate-500">No past sessions found for this subject.</p>'}
+                        <div class="pt-4 border-t border-slate-200">
+                             <button id="back-to-home-btn" class="bg-slate-600 hover:bg-slate-700 text-white font-semibold py-2 px-6 rounded-lg">Back to Home</button>
+                        </div>
+                    </div>
+                </div>`;
+            
+            document.getElementById('start-today-session-btn').addEventListener('click', startNewSession);
+            document.getElementById('back-to-home-btn').addEventListener('click', renderSlotSelection);
+            document.querySelectorAll('.modify-history-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                const sessionIndex = e.currentTarget.dataset.index;
+                modifyHistoricSession(historyKey, sessionIndex);
+            }));
+        }
+
+        function renderHistoryCard(session, index) {
+            const isRecent = (new Date().getTime() - session.timestamp) < 3600000; // 1 hour in milliseconds
+            return `
+                <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 flex justify-between items-center">
+                    <div>
+                        <p class="font-bold text-slate-800">Date: ${new Date(session.timestamp).toLocaleDateString()}</p>
+                        <div class="flex space-x-4 text-sm mt-1">
+                            <span class="text-green-600">Present: ${session.presentStudents.length}</span>
+                            <span class="text-red-600">Absent: ${session.absentStudents.length}</span>
+                        </div>
+                    </div>
+                    <button data-index="${index}" class="modify-history-btn text-white font-semibold py-2 px-4 rounded-lg ${isRecent ? 'bg-orange-500 hover:bg-orange-600 cursor-pointer' : 'bg-slate-400 cursor-not-allowed'}" ${!isRecent ? 'disabled' : ''}>
+                        <i class="fas fa-edit mr-2"></i>Modify
+                    </button>
+                </div>`;
+        }
+        
+        function renderAttendanceTaking() {
+            const { subject, semester } = currentSession;
+            mainContent.innerHTML = `
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-8 py-6"><h3 class="text-2xl font-bold text-white">Attendance Taking</h3><div class="mt-3 text-green-100">${subject} - Semester ${semester}</div></div>
+                    <div class="p-8">
+                        <div class="grid lg:grid-cols-2 gap-8 items-start">
+                            <div class="space-y-4">
+                                <h4 class="text-lg font-semibold text-slate-700">Live Camera Feed</h4>
+                                <div class="w-full max-w-xl bg-slate-800 rounded-lg overflow-hidden relative flex items-center justify-center aspect-video"><video id="camera-feed" class="camera-feed" autoplay playsinline muted></video><div id="camera-status" class="absolute inset-0 bg-slate-800 flex items-center justify-center"><p class="text-white text-center">Camera is starting...</p></div></div>
+                                <button id="capture-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md disabled:opacity-50 flex items-center justify-center"><span id="capture-btn-text"><i class="fas fa-camera mr-2"></i>Capture Attendance</span><div id="capture-loader" class="loader hidden"></div></button>
+                            </div>
+                            <div class="space-y-4">
+                                <h4 class="text-lg font-semibold text-slate-700">Attendance Log (${currentSession.presentStudents.length})</h4>
+                                <div class="bg-white border border-slate-200 rounded-lg overflow-hidden h-96 overflow-y-auto custom-scrollbar">
+                                    <table class="min-w-full divide-y divide-slate-200"><thead class="bg-slate-50 sticky top-0"><tr><th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Student ID</th><th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name</th><th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Time</th></tr></thead><tbody id="attendance-log-body" class="bg-white divide-y divide-slate-200">${renderLogRows()}</tbody></table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-8 flex gap-4"><button id="end-session-btn" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md"><i class="fas fa-stop mr-2"></i>End Session</button></div>
+                    </div>
+                </div>`;
+            
+            document.getElementById('capture-btn').addEventListener('click', captureAttendance);
+            document.getElementById('end-session-btn').addEventListener('click', endSession);
+            startCamera();
+        }
+        
+        function renderSessionSummary() {
+            const { subject, semester, presentStudents, absentStudents } = currentSession;
+            mainContent.innerHTML = `
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden max-w-2xl mx-auto">
+                    <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6 text-center"><h3 class="text-2xl font-bold text-white">Session Summary</h3><p class="text-blue-100 mt-2">${subject} - Semester ${semester}</p></div>
+                    <div class="p-8 space-y-6">
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <div class="bg-green-50 border border-green-200 p-4 rounded-lg"><div class="text-3xl font-bold text-green-600">${presentStudents.length}</div><div class="text-sm text-slate-500">Present</div></div>
+                            <div class="bg-red-50 border border-red-200 p-4 rounded-lg"><div class="text-3xl font-bold text-red-600">${absentStudents.length}</div><div class="text-sm text-slate-500">Absent</div></div>
+                        </div>
+                        <div><h4 class="text-lg font-semibold text-slate-800 mb-2">Present Students</h4><div class="space-y-2">${presentStudents.length > 0 ? presentStudents.map(s => `<div class="bg-green-50 p-3 rounded-md text-sm">${s.name} <span class="text-slate-500 block">${s.registrationNo}</span></div>`).join('') : '<p class="text-slate-500 text-sm">No students were marked present.</p>'}</div></div>
+                        <div><h4 class="text-lg font-semibold text-slate-800 mb-2">Absent Students</h4><div class="space-y-2">${absentStudents.length > 0 ? absentStudents.map(s => `<div class="bg-red-50 p-3 rounded-md text-sm">${s.name} <span class="text-slate-500 block">${s.registrationNo}</span></div>`).join('') : '<p class="text-slate-500 text-sm">No students were marked absent.</p>'}</div></div>
+                        <div class="flex gap-4 pt-4 border-t border-slate-200"><button id="home-btn" class="bg-slate-600 hover:bg-slate-700 text-white font-semibold py-2 px-6 rounded-lg">Back to Home</button><button id="modify-attendance-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-6 rounded-lg">Modify Attendance</button></div>
+                    </div>
+                </div>`;
+            document.getElementById('home-btn').addEventListener('click', () => renderSlotSelection());
+            document.getElementById('modify-attendance-btn').addEventListener('click', () => renderModifyAttendance(false));
+        }
+        
+        function renderModifyAttendance(fromHistory = false, historyKey = '', sessionIndex = -1) {
+            const { subject, semester } = currentSession;
+             modificationState = {
+                initialPresent: [...currentSession.presentStudents],
+                initialAbsent: [...currentSession.absentStudents],
+                currentPresent: [...currentSession.presentStudents],
+                currentAbsent: [...currentSession.absentStudents]
+            };
+
+            mainContent.innerHTML = `
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden max-w-3xl mx-auto">
+                    <div class="bg-gradient-to-r from-orange-500 to-red-500 px-8 py-6 text-center"><h3 class="text-2xl font-bold text-white">Modify Attendance</h3><p class="text-orange-100 mt-2">${subject} - Semester ${semester}</p></div>
+                    <div class="p-8">
+                        <div class="grid grid-cols-2 gap-8">
+                            <div><h4 class="text-lg font-semibold text-green-600 mb-3">Present</h4><div id="modify-present-list" class="space-y-2">${renderModifyList(modificationState.currentPresent, 'present')}</div></div>
+                            <div><h4 class="text-lg font-semibold text-red-600 mb-3">Absent</h4><div id="modify-absent-list" class="space-y-2">${renderModifyList(modificationState.currentAbsent, 'absent')}</div></div>
+                        </div>
+                        <div class="flex gap-4 pt-6 mt-6 border-t border-slate-200">
+                            <button id="cancel-modify-btn" class="bg-slate-500 hover:bg-slate-600 text-white font-semibold py-2 px-6 rounded-lg">Cancel</button>
+                            <button id="save-changes-btn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg flex items-center justify-center"><span id="save-btn-text">Save Changes</span><div id="save-loader" class="loader hidden"></div></button>
+                        </div>
+                    </div>
+                </div>`;
+            
+            document.getElementById('cancel-modify-btn').onclick = () => {
+                if(fromHistory) {
+                    renderAttendanceHistory();
+                } else {
+                    renderSessionSummary();
+                }
+            };
+            document.getElementById('save-changes-btn').onclick = () => saveAttendanceChanges(fromHistory, historyKey, sessionIndex);
+            attachModificationListeners();
+        }
+
+        function renderModifyList(studentList, type) {
+            if (studentList.length === 0) return `<p class="text-slate-500 text-sm">No students marked as ${type}.</p>`;
+            return studentList.map(student => `
+                <div class="bg-slate-50 p-3 rounded-md flex justify-between items-center text-sm">
+                    <div>${student.name} <span class="text-slate-500 block">${student.registrationNo}</span></div>
+                    <button data-id="${student.studentId}" data-action="${type === 'present' ? 'mark-absent' : 'mark-present'}" class="${type === 'present' ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white text-xs font-bold py-1 px-2 rounded">
+                        Mark ${type === 'present' ? 'Absent' : 'Present'}
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function renderLogRows() {
+            if (currentSession.presentStudents.length === 0) {
+                return `<tr><td colspan="3" class="px-6 py-8 text-center text-slate-500">No students marked present yet.</td></tr>`;
+            }
+            return currentSession.presentStudents.map(student => `
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">${student.registrationNo}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600">${student.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${student.time}</td>
+                </tr>
+            `).join('');
+        }
+
+        // --- Core Logic ---
+        
+        function showHistory() {
+            const select = document.getElementById('class-slot-select');
+            const errorDiv = document.getElementById('slot-error');
+            if (!select.value) {
+                errorDiv.textContent = 'Please select a class slot.';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            errorDiv.classList.add('hidden');
+            const [subject, semester] = select.value.split('_');
+            currentSession.subject = subject;
+            currentSession.semester = semester;
+            renderAttendanceHistory();
+        }
+
+        function startNewSession() {
+            currentSession.presentStudents = [];
+            currentSession.absentStudents = [];
+            renderAttendanceTaking();
+        }
+
+        function modifyHistoricSession(historyKey, sessionIndex) {
+            const historicSession = mockHistoryData[historyKey][sessionIndex];
+            currentSession = JSON.parse(JSON.stringify(historicSession)); 
+            renderModifyAttendance(true, historyKey, sessionIndex);
+        }
+        
+       async function startCamera() {
+            const cameraStatus = document.getElementById('camera-status');
+            const cameraFeed = document.getElementById('camera-feed');
+            const captureBtn = document.getElementById('capture-btn');
+            try {
+                cameraStatus.innerHTML = '<p>Requesting camera access...</p>';
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+                cameraFeed.srcObject = videoStream;
+                cameraFeed.onloadedmetadata = () => {
+                    cameraStatus.classList.add('hidden');
+                    if(captureBtn) captureBtn.disabled = false;
+                }
+            } catch (error) {
+                console.error("Camera Error:", error);
+                cameraStatus.innerHTML = `<p class="text-red-400">Could not access camera. Please grant permission and refresh.</p>`;
+                if(captureBtn) captureBtn.disabled = true;
+            }
+        }
+
+        async function captureAttendance() {
+            const captureBtn = document.getElementById('capture-btn');
+            const btnText = document.getElementById('capture-btn-text');
+            const loader = document.getElementById('capture-loader');
+            
+            captureBtn.disabled = true;
+            btnText.classList.add('hidden');
+            loader.classList.remove('hidden');
+
+            const canvas = document.createElement('canvas');
+            const video = document.getElementById('camera-feed');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageBase64 = canvas.toDataURL('image/jpeg');
+
+            try {
+                const response = await fetch(FACE_RECOGNITION_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        imageBase64: imageBase64,
+                        subject: currentSession.subject,
+                        semester: currentSession.semester
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success && result.student) {
+                    const student = result.student;
+                    const now = new Date();
+                    const studentData = {
+                        studentId: student.id,
+                        registrationNo: student.registrationNo,
+                        name: student.name,
+                        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    };
+                    
+                    if (!currentSession.presentStudents.some(s => s.studentId === studentData.studentId)) {
+                        currentSession.presentStudents.push(studentData);
+                        document.getElementById('attendance-log-body').innerHTML = renderLogRows();
+                        showNotification(`Recognized: ${student.name}`, false);
+                    } else {
+                         showNotification(`${student.name} is already marked present.`, false);
+                    }
+                } else {
+                    showNotification(result.message || "Could not recognize face.", true);
+                }
+
+            } catch (error) {
+                console.error("Error during face recognition:", error);
+                showNotification("API request failed.", true);
+            } finally {
+                captureBtn.disabled = false;
+                btnText.classList.remove('hidden');
+                loader.classList.add('hidden');
+            }
+        }
+        function endSession() { 
+            stopCamera();
+            renderSessionSummary(); 
+        }
+
+        function stopCamera() { if (videoStream) { videoStream.getTracks().forEach(track => track.stop()); videoStream = null; } }
+        
+        function attachModificationListeners() {
+            document.getElementById('modify-present-list').addEventListener('click', handleModificationClick);
+            document.getElementById('modify-absent-list').addEventListener('click', handleModificationClick);
+        }
+
+        function handleModificationClick(event) {
+            if (event.target.tagName !== 'BUTTON') return;
+            
+            const studentId = event.target.dataset.id;
+            const action = event.target.dataset.action;
+
+            if (action === 'mark-absent') {
+                const studentIndex = modificationState.currentPresent.findIndex(s => s.studentId === studentId);
+                if (studentIndex > -1) {
+                    const [student] = modificationState.currentPresent.splice(studentIndex, 1);
+                    modificationState.currentAbsent.push(student);
+                }
+            } else if (action === 'mark-present') {
+                const studentIndex = modificationState.currentAbsent.findIndex(s => s.studentId === studentId);
+                if (studentIndex > -1) {
+                    const [student] = modificationState.currentAbsent.splice(studentIndex, 1);
+                    modificationState.currentPresent.push(student);
+                }
+            }
+            
+            document.getElementById('modify-present-list').innerHTML = renderModifyList(modificationState.currentPresent, 'present');
+            document.getElementById('modify-absent-list').innerHTML = renderModifyList(modificationState.currentAbsent, 'absent');
+        }
+
+        async function saveAttendanceChanges(fromHistory, historyKey, sessionIndex) {
+            const saveBtn = document.getElementById('save-changes-btn');
+            const btnText = document.getElementById('save-btn-text');
+            const loader = document.getElementById('save-loader');
+            
+            saveBtn.disabled = true;
+            btnText.classList.add('hidden');
+            loader.classList.remove('hidden');
+
+            const modifications = [];
+            
+            modificationState.currentAbsent.forEach(student => {
+                if (modificationState.initialPresent.some(s => s.studentId === student.studentId)) {
+                    modifications.push({ studentId: student.studentId, action: 'MARK_ABSENT' });
+                }
+            });
+            
+            modificationState.currentPresent.forEach(student => {
+                if (modificationState.initialAbsent.some(s => s.studentId === student.studentId)) {
+                    modifications.push({ studentId: student.studentId, action: 'MARK_PRESENT' });
+                }
+            });
+
+            if (modifications.length === 0) {
+                showNotification("No changes were made.", false);
+                 if (fromHistory) {
+                    renderAttendanceHistory();
+                } else {
+                    renderSessionSummary();
+                }
+                return;
+            }
+
+            try {
+                const response = await fetch(MODIFY_ATTENDANCE_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        subject: currentSession.subject,
+                        semester: currentSession.semester,
+                        modifications: modifications,
+                        // Pass timestamp if modifying a historic entry
+                        timestamp: fromHistory ? mockHistoryData[historyKey][sessionIndex].timestamp : undefined
+                    })
+                });
+
+                 if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Failed to save changes.');
+                }
+
+                if (fromHistory) {
+                    mockHistoryData[historyKey][sessionIndex].presentStudents = [...modificationState.currentPresent];
+                    mockHistoryData[historyKey][sessionIndex].absentStudents = [...modificationState.currentAbsent];
+                    showNotification("Historic attendance updated!", false);
+                    renderAttendanceHistory();
+                } else {
+                    currentSession.presentStudents = [...modificationState.currentPresent];
+                    currentSession.absentStudents = [...modificationState.currentAbsent];
+                    showNotification("Attendance updated successfully!", false);
+                    renderSessionSummary();
+                }
+
+            } catch (error) {
+                console.error("Error saving changes:", error);
+                showNotification(error.message, true);
+            } finally {
+                saveBtn.disabled = false;
+                btnText.classList.remove('hidden');
+                loader.classList.add('hidden');
+            }
+        }
+        
+        // --- Initial Load ---
+        window.addEventListener('load', () => {
+            const idToken = localStorage.getItem('id_token');
+            if (!idToken) { window.location.href = LOGIN_PAGE_URI; return; }
+            const userData = parseJwt(idToken);
+            if (!userData || !userData.email || !authorizedEmails.includes(userData.email)) { alert('Unauthorized access detected. You will be logged out.'); performLogout(); return; }
+            document.getElementById('faculty-email').textContent = userData.email;
+            document.getElementById('logout-btn').addEventListener('click', (e) => { e.preventDefault(); if (confirm('Are you sure you want to logout?')) { performLogout(); } });
+            renderSlotSelection();
+        });
+    </script>
+</body>
+</html>
