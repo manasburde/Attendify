@@ -1,0 +1,104 @@
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+
+const ddbClient = new DynamoDBClient({ region: "ap-south-1" });
+const docClient = DynamoDBDocumentClient.from(ddbClient);
+const tableName = "StudentData";
+
+export const handler = async (event) => {
+    const corsHeaders = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "OPTIONS,POST"
+    };
+
+    if (event.httpMethod === 'OPTIONS') {
+        return { statusCode: 200, headers: corsHeaders, body: '' };
+    }
+
+    try {
+        console.log("Received modification request:", JSON.stringify(event.body, null, 2));
+
+        const { subject, semester, modifications } = JSON.parse(event.body);
+
+        if (!subject || !semester || !modifications || !Array.isArray(modifications)) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({ message: "Invalid request body. 'subject', 'semester', and 'modifications' array are required." })
+            };
+        }
+
+        // Process all modifications concurrently
+        const updatePromises = modifications.map(async (mod) => {
+            const { studentId, action } = mod;
+
+            // 1. Get the latest student record
+            const getCommand = new GetCommand({
+                TableName: tableName,
+                Key: { StudentID: studentId }
+            });
+            const studentResult = await docClient.send(getCommand);
+
+            if (!studentResult.Item) {
+                console.error(`Student not found: ${studentId}`);
+                return { success: false, studentId, message: "Student not found" };
+            }
+
+            const student = studentResult.Item;
+            const semesterKey = `sem${semester}`;
+            const subjectIndex = student.attendance?.[semesterKey]?.findIndex(sub => sub.name === subject);
+
+            if (subjectIndex === -1 || subjectIndex === undefined) {
+                console.error(`Subject or semester not found for student ${studentId}`);
+                return { success: false, studentId, message: "Subject or semester not found" };
+            }
+
+            // 2. Apply the modification
+            const presentCount = student.attendance[semesterKey][subjectIndex].present || 0;
+            if (action === "MARK_ABSENT") {
+                // Decrement present count, but not below 0
+                student.attendance[semesterKey][subjectIndex].present = Math.max(0, presentCount - 1);
+                console.log(`Marking ABSENT for ${studentId}. New present count: ${student.attendance[semesterKey][subjectIndex].present}`);
+            } else if (action === "MARK_PRESENT") {
+                // Increment present count, but not beyond total classes
+                const totalCount = student.attendance[semesterKey][subjectIndex].total || 0;
+                student.attendance[semesterKey][subjectIndex].present = Math.min(totalCount, presentCount + 1);
+                 console.log(`Marking PRESENT for ${studentId}. New present count: ${student.attendance[semesterKey][subjectIndex].present}`);
+            }
+
+            // 3. Write the entire updated record back to DynamoDB
+            const putCommand = new PutCommand({
+                TableName: tableName,
+                Item: student
+            });
+            await docClient.send(putCommand);
+            return { success: true, studentId };
+        });
+
+        const results = await Promise.all(updatePromises);
+        const failedModifications = results.filter(r => !r.success);
+
+        if (failedModifications.length > 0) {
+             return {
+                statusCode: 500,
+                headers: corsHeaders,
+                body: JSON.stringify({ message: "Some attendance modifications failed.", failures: failedModifications })
+            };
+        }
+
+        return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({ message: "Attendance modified successfully!" })
+        };
+
+    } catch (error) {
+        console.error("Error modifying attendance:", error);
+        return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({ message: "Internal server error", error: error.message })
+        };
+    }
+};
