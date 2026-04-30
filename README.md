@@ -26,7 +26,6 @@
 - [Authentication Flow](#-authentication-flow)
 - [Screenshots](#-screenshots)
 - [Known Limitations](#-known-limitations)
-- [License](#-license)
 
 ---
 
@@ -156,7 +155,7 @@ Attendify/
 Create an S3 bucket to store student profile photos:
 
 ```bash
-aws s3 mb s3://attendifystudentphotos --region ap-south-1
+aws s3 mb s3://attendifystudentphotos --region us-east-1
 ```
 
 Upload student photos following this naming convention:
@@ -174,7 +173,7 @@ Create the Rekognition face collection:
 ```bash
 aws rekognition create-collection \
     --collection-id "StudentFaces" \
-    --region ap-south-1
+    --region us-east-1
 ```
 
 Index each student's photo into the collection. The `external-image-id` must match the student's **Cognito `sub`** (UUID), which is also used as their `StudentID` in DynamoDB:
@@ -184,7 +183,7 @@ aws rekognition index-faces \
     --collection-id "StudentFaces" \
     --image '{"S3Object":{"Bucket":"attendifystudentphotos","Name":"photos/{studentSub}-profile.jpg"}}' \
     --external-image-id "{studentSub}" \
-    --region ap-south-1
+    --region us-east-1
 ```
 
 > ⚠️ Repeat this step for every student. The `external-image-id` is the key that links a recognized face back to a DynamoDB record.
@@ -249,7 +248,7 @@ aws lambda create-function \
     --handler index.handler \
     --zip-file fileb://function.zip \
     --role arn:aws:iam::{account-id}:role/{your-lambda-execution-role} \
-    --region ap-south-1
+    --region us-east-1
 ```
 
 Repeat for `get-attendance`, `getStudentData`, and `modify-attendance`.
@@ -292,7 +291,7 @@ Update the following constants in each HTML file before serving:
 
 **`FacultyLogin.html` & `Loginpage.html`:**
 ```javascript
-const COGNITO_DOMAIN = 'https://{your-cognito-domain}.auth.ap-south-1.amazoncognito.com';
+const COGNITO_DOMAIN = 'https://{your-cognito-domain}.auth.us-east-1.amazoncognito.com';
 const CLIENT_ID = '{your-app-client-id}';
 const REDIRECT_URI = 'http://localhost:8000/{LoginPage}.html';
 ```
@@ -307,7 +306,7 @@ const authorizedEmails = [
 
 **`FacultyPortal.html` & `StudentPortal.html`:**
 ```javascript
-const API_BASE_URL = 'https://{your-api-id}.execute-api.ap-south-1.amazonaws.com/prod';
+const API_BASE_URL = 'https://{your-api-id}.execute-api.us-east-1.amazonaws.com/prod';
 ```
 
 Serve the frontend locally:
@@ -377,7 +376,7 @@ Allows faculty to batch-update attendance records. Each modification specifies a
 
 ```json
 {
-    "StudentID": "31937dea-4031-70b5-279b-52812cbe1947",
+    "StudentID": "cognito user id",
     "firstName": "Rahul",
     "lastName": "Sharma",
     "registrationNo": "2021CS001",
@@ -424,10 +423,6 @@ Allows faculty to batch-update attendance records. Each modification specifies a
 - `AttendanceHistory` is currently scanned without an index; adding a GSI on `subject + semester` is recommended for scale.
 
 ---
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
 
 ---
 
