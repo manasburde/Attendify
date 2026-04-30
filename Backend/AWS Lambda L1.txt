@@ -1,0 +1,261 @@
+import { RekognitionClient, SearchFacesByImageCommand } from "@aws-sdk/client-rekognition";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+
+
+const rekognitionClient = new RekognitionClient({ region: "example: us-east-1" });
+const ddbClient = new DynamoDBClient({ region: "example: us-east-1" });
+const docClient = DynamoDBDocumentClient.from(ddbClient);
+
+
+export const handler = async (event) => {
+    const corsHeaders = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "OPTIONS,POST"
+    };
+
+
+    if (event.httpMethod === 'OPTIONS') {
+        return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: ''
+        };
+    }
+
+
+    try {
+        console.log("🚀 NUCLEAR FIX LAMBDA - Starting face recognition");
+        console.log("Received event:", JSON.stringify(event, null, 2));
+
+
+        const { imageBase64, subject, semester, classDate } = JSON.parse(event.body);
+        console.log(`📋 Processing: Subject="${subject}", Semester="${semester}"`);
+
+
+        if (!imageBase64) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    success: false,
+                    message: "Image data is required"
+                })
+            };
+        }
+
+
+        const imageBytes = Buffer.from(imageBase64.replace(/^data:image\/[a-z]+;base64,/, ''), 'base64');
+        console.log(`📸 Image processed: ${imageBytes.length} bytes`);
+
+
+        // Face Recognition
+        const searchCommand = new SearchFacesByImageCommand({
+            CollectionId: "StudentFaces",
+            Image: { Bytes: imageBytes },
+            MaxFaces: 1,
+            FaceMatchThreshold: 80
+        });
+
+
+        console.log("🔍 Searching faces in Rekognition...");
+        const searchResult = await rekognitionClient.send(searchCommand);
+
+
+        if (searchResult.FaceMatches && searchResult.FaceMatches.length > 0) {
+            const studentId = searchResult.FaceMatches[0].Face.ExternalImageId;
+            const confidence = searchResult.FaceMatches[0].Similarity;
+
+
+            console.log(`👤 Face match found - Student ID: ${studentId}, Confidence: ${confidence}%`);
+
+
+            // Get student details from DynamoDB
+            const getStudentCommand = new GetCommand({
+                TableName: "StudentData",
+                Key: { StudentID: studentId }
+            });
+
+
+            console.log("📖 Getting student data from DynamoDB...");
+            const studentResult = await docClient.send(getStudentCommand);
+
+
+            if (studentResult.Item) {
+                const student = studentResult.Item;
+                console.log(`👨‍🎓 Student found: ${student.firstName} ${student.lastName}`);
+
+
+                // 💥 NUCLEAR OPTION: Update attendance by replacing entire record
+                const updateResult = await updateAttendanceNuclearOption(student, subject, semester);
+
+
+                if (updateResult.success) {
+                    console.log(`✅ SUCCESS! Attendance updated: ${updateResult.message}`);
+
+                    return {
+                        statusCode: 200,
+                        headers: corsHeaders,
+                        body: JSON.stringify({
+                            success: true,
+                            student: {
+                                id: studentId,
+                                name: `${student.firstName} ${student.lastName}`,
+                                registrationNo: student.registrationNo,
+                                confidence: confidence.toFixed(2)
+                            },
+                            message: `Attendance marked successfully - ${updateResult.message}`,
+                            debugInfo: updateResult.debugInfo
+                        })
+                    };
+                } else {
+                    console.log(`❌ Failed to update attendance: ${updateResult.message}`);
+
+                    return {
+                        statusCode: 200,
+                        headers: corsHeaders,
+                        body: JSON.stringify({
+                            success: true,
+                            student: {
+                                id: studentId,
+                                name: `${student.firstName} ${student.lastName}`,
+                                registrationNo: student.registrationNo,
+                                confidence: confidence.toFixed(2)
+                            },
+                            message: `Face recognized but attendance update failed: ${updateResult.message}`,
+                            debugInfo: updateResult.debugInfo
+                        })
+                    };
+                }
+            } else {
+                console.log(`❌ Student not found in database for ID: ${studentId}`);
+                return {
+                    statusCode: 200,
+                    headers: corsHeaders,
+                    body: JSON.stringify({
+                        success: false,
+                        message: "Student record not found in database"
+                    })
+                };
+            }
+        }
+
+
+        console.log("❌ No face matches found");
+        return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({
+                success: false,
+                message: "No matching face found"
+            })
+        };
+
+
+    } catch (error) {
+        console.error("💥 Lambda function error:", error);
+        return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({
+                success: false,
+                message: "Internal server error",
+                error: error.message,
+                stack: error.stack
+            })
+        };
+    }
+};
+
+
+/**
+ * 💥 NUCLEAR OPTION: Replace entire DynamoDB record
+ * This WILL work because we avoid all UPDATE complexities
+ */
+async function updateAttendanceNuclearOption(student, subject, semester) {
+    try {
+        console.log(`💥 NUCLEAR OPTION: Updating attendance for ${subject} in semester ${semester}`);
+
+        const semesterKey = `sem${semester}`;
+
+        // Validate semester exists
+        if (!student.attendance || !student.attendance[semesterKey]) {
+            return {
+                success: false,
+                message: `Semester ${semester} not found`,
+                debugInfo: {
+                    availableSemesters: Object.keys(student.attendance || {}),
+                    searchedFor: semesterKey
+                }
+            };
+        }
+
+        // Find subject
+        const subjectIndex = student.attendance[semesterKey].findIndex(sub => sub.name === subject);
+
+        if (subjectIndex === -1) {
+            return {
+                success: false,
+                message: `Subject "${subject}" not found in semester ${semester}`,
+                debugInfo: {
+                    availableSubjects: student.attendance[semesterKey].map(s => s.name),
+                    searchedFor: subject
+                }
+            };
+        }
+
+        console.log(`✅ Found subject "${subject}" at index ${subjectIndex}`);
+
+        // Create a deep copy of the student record
+        const updatedStudent = JSON.parse(JSON.stringify(student));
+
+        // Update attendance values
+        const currentPresent = updatedStudent.attendance[semesterKey][subjectIndex].present || 0;
+        const currentTotal = updatedStudent.attendance[semesterKey][subjectIndex].total || 0;
+
+        updatedStudent.attendance[semesterKey][subjectIndex].present = currentPresent + 1;
+        updatedStudent.attendance[semesterKey][subjectIndex].total = currentTotal + 1;
+
+        const newPresent = updatedStudent.attendance[semesterKey][subjectIndex].present;
+        const newTotal = updatedStudent.attendance[semesterKey][subjectIndex].total;
+
+        console.log(`📊 Updating attendance: ${currentPresent}/${currentTotal} → ${newPresent}/${newTotal}`);
+
+        // 🚀 NUCLEAR OPTION: Use PutCommand to replace entire record
+        console.log("🚀 Executing PutCommand (complete record replacement)...");
+
+        const putCommand = new PutCommand({
+            TableName: "StudentData",
+            Item: updatedStudent
+        });
+
+        const putResult = await docClient.send(putCommand);
+        console.log("✅ PutCommand executed successfully");
+
+        return {
+            success: true,
+            message: `${subject}: ${currentPresent + 1}/${currentTotal + 1} (was ${currentPresent}/${currentTotal})`,
+            debugInfo: {
+                studentId: student.StudentID,
+                subject: subject,
+                semester: semester,
+                oldValues: { present: currentPresent, total: currentTotal },
+                newValues: { present: newPresent, total: newTotal },
+                updateMethod: "PutCommand (complete record replacement)"
+            }
+        };
+
+    } catch (error) {
+        console.error("💥 Nuclear option failed:", error);
+        return {
+            success: false,
+            message: `Update failed: ${error.message}`,
+            debugInfo: {
+                errorName: error.name,
+                errorCode: error.code || error.$metadata?.errorCode,
+                errorMessage: error.message
+            }
+        };
+    }
+}
