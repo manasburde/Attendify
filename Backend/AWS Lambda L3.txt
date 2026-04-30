@@ -1,0 +1,37 @@
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+const client = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(client);
+export const handler = async (event) => {
+    // The user's unique ID is passed securely by the API Gateway Cognito Authorizer
+    const studentId = event.requestContext.authorizer.claims.sub;
+    const command = new GetCommand({
+        TableName: "StudentData",
+        Key: {
+            StudentID: studentId,
+        },
+    });
+    try {
+        const response = await docClient.send(command);
+        if (response.Item) {
+            return {
+                statusCode: 200,
+                headers: { "Access-Control-Allow-Origin": "*" }, // Enable CORS
+                body: JSON.stringify(response.Item),
+            };
+        } else {
+            return {
+                statusCode: 404,
+                headers: { "Access-Control-Allow-Origin": "*" },
+                body: JSON.stringify({ message: "Student data not found." }),
+            };
+        }
+    } catch (error) {
+        console.error(error);
+        return {
+            statusCode: 500,
+            headers: { "Access-Control-Allow-Origin": "*" },
+            body: JSON.stringify({ message: "Internal server error." }),
+        };
+    }
+};
